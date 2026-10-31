@@ -1,0 +1,10 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+# .terraform.lock.hcl SHOULD be committed (pins provider versions)
+tfplan
+.terraform.tfstate.lock.info
+# Real values (account id, connection ARN) stay local; see terraform.tfvars.example
+terraform.tfvars

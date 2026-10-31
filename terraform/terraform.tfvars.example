@@ -1,0 +1,5 @@
+# Not secret. Credentials come from AWS_PROFILE in your shell.
+account_id     = "<YOUR_ACCOUNT_ID>"
+region         = "eu-west-1"
+connection_arn = "arn:aws:codeconnections:eu-west-1:<YOUR_ACCOUNT_ID>:connection/<CONNECTION_ID>"
+github_owner   = "<YOUR_GITHUB_USER>"
