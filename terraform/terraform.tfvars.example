@@ -10,3 +10,4 @@ github_owner   = "<YOUR_GITHUB_USER>"
 # domain_zone = "lab.example.com"
 # web_host    = "pay.lab.example.com"
 # api_host    = "api.lab.example.com"
+# certificate_domain = "*.lab.example.com"   # only if your certificate is a wildcard

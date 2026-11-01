@@ -27,6 +27,12 @@ variable "api_host" {
   default     = ""
 }
 
+variable "certificate_domain" {
+  description = "Domain name of the ISSUED ACM certificate to use, e.g. *.lab.example.com for a wildcard covering web_host and api_host. Empty = a certificate whose name is web_host."
+  type        = string
+  default     = ""
+}
+
 variable "connection_arn" {
   description = "EXISTING CodeConnections (GitHub) connection ARN, status Available. Created once in the console."
   type        = string
