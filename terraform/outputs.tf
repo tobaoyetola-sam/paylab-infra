@@ -1,15 +1,15 @@
 output "web_url" {
   description = "The payment web page."
-  value       = "https://${var.web_host}"
+  value       = local.web_origin
 }
 
 output "api_health_url" {
-  description = "api-gateway health check through the ALB."
-  value       = "https://${var.api_host}/health"
+  description = "API check through the ALB (domain mode: /health on the API host; no domain: /api/wallets returns the wallet list)."
+  value       = local.use_domain ? "https://${var.api_host}/health" : "${local.web_origin}/api/wallets"
 }
 
 output "alb_dns_name" {
-  description = "Raw ALB name (use the https URLs above; the certificate doesn't cover this name)."
+  description = "Raw ALB name. In domain mode use the https URLs above; the certificate doesn't cover this name."
   value       = aws_lb.paylab.dns_name
 }
 
