@@ -36,6 +36,12 @@ resource "aws_service_discovery_service" "svc" {
   # ECS reports task health to Cloud Map (failure threshold is always 1 now; the
   # argument is deprecated, so the block is left empty).
   health_check_custom_config {}
+
+  # AWS reads the empty block back as absent, which would make every plan
+  # replace these services (and break discovery for a moment). Set it once.
+  lifecycle {
+    ignore_changes = [health_check_custom_config]
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -137,6 +143,7 @@ resource "aws_ecs_service" "svc" {
     aws_lb_listener.https,
     aws_lb_listener_rule.api_host,
     aws_lb_listener_rule.api_path,
+    aws_lb_listener_rule.web_host,
     aws_iam_role_policy_attachment.ecs_execution_managed,
     aws_iam_role_policy.ecs_execution_db_password,
   ]
