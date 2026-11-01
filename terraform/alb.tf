@@ -74,8 +74,7 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# :443 (domain mode only). Every hostname we serve has its own rule below;
-# anything else that reaches the ALB (another name, the raw ALB DNS) gets a 404.
+# :443 -> web by default (domain mode only)
 resource "aws_lb_listener" "https" {
   count             = local.use_domain ? 1 : 0
   load_balancer_arn = aws_lb.paylab.arn
@@ -85,12 +84,8 @@ resource "aws_lb_listener" "https" {
   certificate_arn   = data.aws_acm_certificate.paylab[0].arn
 
   default_action {
-    type = "fixed-response"
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "Not found"
-      status_code  = "404"
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.web.arn
   }
 }
 
@@ -112,8 +107,7 @@ resource "aws_lb_listener_rule" "api_host" {
   }
 }
 
-# <web host>/api/* -> api-gateway (the page calls the API on its own origin).
-# Domain mode also matches the host; with no domain there is only one host anyway.
+# <web host>/api/* -> api-gateway (the page calls the API on its own origin)
 resource "aws_lb_listener_rule" "api_path" {
   listener_arn = local.use_domain ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
   priority     = 20
@@ -124,36 +118,9 @@ resource "aws_lb_listener_rule" "api_path" {
     }
   }
 
-  dynamic "condition" {
-    for_each = local.use_domain ? [1] : []
-    content {
-      host_header {
-        values = [var.web_host]
-      }
-    }
-  }
-
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
-  }
-}
-
-# <web host> -> web (domain mode only; with no domain the :80 default does this)
-resource "aws_lb_listener_rule" "web_host" {
-  count        = local.use_domain ? 1 : 0
-  listener_arn = aws_lb_listener.https[0].arn
-  priority     = 30
-
-  condition {
-    host_header {
-      values = [var.web_host]
-    }
-  }
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web.arn
   }
 }
 
