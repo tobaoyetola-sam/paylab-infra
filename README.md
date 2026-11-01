@@ -1,6 +1,19 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/aricxpoint-logo-white.png">
+    <img alt="aricxpoint technologies" src=".github/aricxpoint-logo-black.png" width="320">
+  </picture>
+</p>
+
 # paylab-infra
 
 Shared, one-time AWS setup for **PayLab**, the aricxpoint DevOps class "Payment Web App Deployment".
+
+> **Start here: [`terraform/`](terraform/README.md).** One `terraform apply` builds the whole stack in your own AWS
+> account (with or without a domain) and one `terraform destroy` removes it. The architecture diagram is
+> [`docs/paylab-architecture.drawio`](docs/paylab-architecture.drawio) (open it at https://app.diagrams.net).
+> The numbered `0x-*.sh` scripts below are the original step-by-step version, kept for learning what each AWS CLI
+> call does. Don't mix the two in one account.
 
 PayLab is a small payment app made of 5 services. **Each service lives in its own GitHub repo**
 and is deployed by its own AWS CodePipeline on every push to `main`:
