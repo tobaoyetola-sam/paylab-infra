@@ -2,7 +2,7 @@
 
 One `terraform apply` creates the whole PayLab stack: network, database, IAM, ECR, ECS (5 Fargate services),
 service discovery, load balancer + HTTPS + DNS, and the 5 CI/CD pipelines. One `terraform destroy` removes it.
-It builds exactly what the numbered bash scripts in `paylab-infra/` build, with the same names.
+It builds what the numbered bash scripts in `paylab-infra/` (the original step-by-step version) build, with the same names.
 
 | Bash script | Terraform file |
 |---|---|
@@ -20,31 +20,43 @@ It builds exactly what the numbered bash scripts in `paylab-infra/` build, with 
 The five services are one map in `locals.tf` (port, health path, CPU/memory, env vars, needs the DB?, which target group,
 Cloud Map yes/no). Most resources use `for_each` over that map, so adding a service is one new map entry.
 
-## What stays outside Terraform (persistent, never destroyed)
+## Two ways to run it: with or without a domain
+
+| | No domain (default) | Your own domain |
+|---|---|---|
+| `terraform.tfvars` | leave `domain_zone` out | `domain_zone`, `web_host`, `api_host` |
+| Site URL | `http://<ALB DNS name>` (see `terraform output web_url`) | `https://pay.<your zone>` |
+| Load balancer | `:80` -> web, `/api/*` -> api-gateway | `:80` -> 301 to HTTPS, `:443` with your ACM certificate |
+| Extra things you create first | nothing | a public Route 53 zone + an ISSUED ACM certificate (same region) for both hostnames |
+
+The class ran in domain mode with `lab.aricxpoint.co`. Students can start with no domain: everything else is identical.
+
+## What stays outside Terraform (create once, never destroyed)
 
 | Thing | How Terraform uses it |
 |---|---|
-| Public hosted zone `lab.aricxpoint.co` (delegated from Cloudflare) | `data "aws_route53_zone"`. Only the two alias A records `pay.` and `api.` are managed. |
-| ACM certificate for `pay.lab.aricxpoint.co` + `api.lab.aricxpoint.co` (ISSUED) and its validation CNAMEs | `data "aws_acm_certificate"` (domain `pay.lab.aricxpoint.co`, status ISSUED, most recent) |
-| GitHub connection (CodeConnections, status Available) | `connection_arn` in `terraform.tfvars` |
-| ECS service-linked role `AWSServiceRoleForECS` | Not managed (it already exists and survives teardown). In a brand-new account set `create_ecs_service_linked_role = true`. |
+| GitHub connection (Developer Tools > Settings > Connections, status **Available**) | `connection_arn` in `terraform.tfvars` |
+| ECS service-linked role `AWSServiceRoleForECS` | Not managed (it usually exists already). In a brand-new account set `create_ecs_service_linked_role = true`. |
+| Domain mode only: public hosted zone, e.g. `lab.aricxpoint.co` | `data "aws_route53_zone"`. Only the two alias A records for `web_host` and `api_host` are managed. |
+| Domain mode only: ACM certificate for `web_host` + `api_host` (ISSUED) | `data "aws_acm_certificate"` (domain `web_host`, status ISSUED, most recent) |
 
 ## Prerequisites
 
 1. Terraform >= 1.6 (tested with 1.13.3) and AWS CLI v2.
-2. Credentials for the **lab account** in your shell:
+2. Your own copies of the five service repos (fork or push them to your GitHub account), each with a `main` branch:
+   `paylab-web`, `paylab-api-gateway`, `paylab-payment-svc`, `paylab-wallet-svc`, `paylab-notify-svc`.
+   The pipelines read `<github_owner>/paylab-<service>`, so the repo names must stay the same.
+3. The GitHub connection above, with access to those repos.
+4. Credentials for **your** AWS account in your shell:
    ```bash
    export AWS_PROFILE=default        # or your SSO profile; run `aws sso login` first if needed
-   aws sts get-caller-identity       # must show your lab account id
+   aws sts get-caller-identity       # note the Account id
    ```
    `allowed_account_ids` in the provider makes Terraform refuse to run against any other account.
-   Copy `terraform.tfvars.example` to `terraform.tfvars` and fill in your account id, connection ARN and GitHub user
+5. `cp terraform.tfvars.example terraform.tfvars` and fill in your account id, connection ARN and GitHub user
    (`terraform.tfvars` is git-ignored).
-3. The zone, the ISSUED certificate and the Available connection above exist (they do).
-4. The five GitHub repos `tobaoyetola-sam/paylab-<service>` exist with a `main` branch containing `buildspec.yml`.
-5. **Nothing from the bash scripts is still running.** Same names would clash (`alb-sg`, `paylab-db`, `ecsTaskExecutionRole`,
-   `paylab/<svc>` repos, pipelines, ...). Run `../99-teardown.sh` first (it keeps the zone, the certificate and the connection),
-   or `terraform import` each resource.
+6. Nothing named `paylab-*`, `alb-sg`, `app-sg`, `db-sg`, `ecsTaskExecutionRole`, ... already exists in the account
+   (for example from the legacy bash scripts in `../`). Same names would clash.
 
 ## Apply
 
@@ -72,9 +84,9 @@ Total from `apply` to working site: **about 20-25 minutes**.
 terraform output                                   # URLs and helper commands
 eval "$(terraform output -raw watch_pipelines_command)"   # every stage should reach Succeeded
 eval "$(terraform output -raw watch_services_command)"    # runningCount 1 for all five
-curl -s https://api.lab.aricxpoint.co/health      # {"status":"ok","service":"api-gateway"}
-curl -s https://pay.lab.aricxpoint.co/health      # ok
-open https://pay.lab.aricxpoint.co
+curl -s "$(terraform output -raw web_url)/health"  # ok
+curl -s "$(terraform output -raw api_health_url)" # domain: {"status":"ok",...}  no domain: [] or the wallet list
+open "$(terraform output -raw web_url)"
 ```
 
 If a pipeline's first run failed (for example, IAM permissions still propagating a few seconds after creation), just re-run it:
@@ -97,8 +109,8 @@ terraform destroy        # type "yes"; ~10 min (RDS deletion dominates)
 
 It removes everything Terraform created: ECR repos with their images (`force_delete`), the artifact bucket with its
 contents (`force_destroy`), Cloud Map services with leftover instances (`force_destroy`), RDS without a final snapshot,
-the SSM parameters, log groups, IAM roles, ALB, the two DNS records and the security groups (after the services, ALB
-and RDS that use them). The zone, the certificate, its validation records and the GitHub connection are untouched.
+the SSM parameters, log groups, IAM roles, ALB, the two DNS records (domain mode) and the security groups (after the
+services, ALB and RDS that use them). The zone, the certificate and the GitHub connection are untouched.
 
 ## State
 

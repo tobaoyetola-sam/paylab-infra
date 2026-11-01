@@ -1,11 +1,15 @@
-# PERSISTENT, not managed here: the public zone (delegated from Cloudflare) and the
-# ISSUED ACM certificate for pay. + api. (created once by 00-dns-cert.sh).
+# Two modes (see var.domain_zone):
+#   domain set   -> HTTPS on pay./api. hostnames. The public zone and the ISSUED ACM certificate
+#                   are PERSISTENT and not managed here; they are only looked up.
+#   domain empty -> plain HTTP on the ALB's own DNS name. No zone, no certificate needed.
 data "aws_route53_zone" "public" {
+  count        = local.use_domain ? 1 : 0
   name         = var.domain_zone
   private_zone = false
 }
 
 data "aws_acm_certificate" "paylab" {
+  count       = local.use_domain ? 1 : 0
   domain      = var.web_host
   statuses    = ["ISSUED"]
   most_recent = true
@@ -48,29 +52,35 @@ resource "aws_lb_target_group" "web" {
   }
 }
 
-# :80 -> 301 redirect to HTTPS
+# :80 -> 301 redirect to HTTPS (domain mode), or straight to web (no-domain mode)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.paylab.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
-    redirect {
-      protocol    = "HTTPS"
-      port        = "443"
-      status_code = "HTTP_301"
+    type             = local.use_domain ? "redirect" : "forward"
+    target_group_arn = local.use_domain ? null : aws_lb_target_group.web.arn
+
+    dynamic "redirect" {
+      for_each = local.use_domain ? [1] : []
+      content {
+        protocol    = "HTTPS"
+        port        = "443"
+        status_code = "HTTP_301"
+      }
     }
   }
 }
 
-# :443 -> web by default
+# :443 -> web by default (domain mode only)
 resource "aws_lb_listener" "https" {
+  count             = local.use_domain ? 1 : 0
   load_balancer_arn = aws_lb.paylab.arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = data.aws_acm_certificate.paylab.arn
+  certificate_arn   = data.aws_acm_certificate.paylab[0].arn
 
   default_action {
     type             = "forward"
@@ -78,9 +88,10 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# api.lab.aricxpoint.co -> api-gateway
+# api.<domain> -> api-gateway (domain mode only)
 resource "aws_lb_listener_rule" "api_host" {
-  listener_arn = aws_lb_listener.https.arn
+  count        = local.use_domain ? 1 : 0
+  listener_arn = aws_lb_listener.https[0].arn
   priority     = 10
 
   condition {
@@ -95,9 +106,9 @@ resource "aws_lb_listener_rule" "api_host" {
   }
 }
 
-# pay.lab.aricxpoint.co/api/* -> api-gateway (the page calls the API on its own origin)
+# <web host>/api/* -> api-gateway (the page calls the API on its own origin)
 resource "aws_lb_listener_rule" "api_path" {
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = local.use_domain ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
   priority     = 20
 
   condition {
@@ -115,9 +126,9 @@ resource "aws_lb_listener_rule" "api_path" {
 # Public DNS: alias A records -> ALB. Only these two records are managed;
 # the zone, its NS/SOA and the certificate's validation CNAMEs are left alone.
 resource "aws_route53_record" "alias" {
-  for_each = toset([var.web_host, var.api_host])
+  for_each = local.use_domain ? toset([var.web_host, var.api_host]) : toset([])
 
-  zone_id         = data.aws_route53_zone.public.zone_id
+  zone_id         = data.aws_route53_zone.public[0].zone_id
   name            = each.value
   type            = "A"
   allow_overwrite = true # take over records left behind by the bash scripts

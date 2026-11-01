@@ -3,6 +3,10 @@ locals {
   region     = var.region
   namespace  = "paylab.internal" # Cloud Map private DNS namespace
 
+  # domain_zone = "" -> no Route 53 / certificate; the site is http://<ALB DNS name>
+  use_domain = var.domain_zone != ""
+  web_origin = local.use_domain ? "https://${var.web_host}" : "http://${aws_lb.paylab.dns_name}"
+
   # One entry per service (= one GitHub repo paylab-<name>, one ECR repo paylab/<name>,
   # one task definition paylab-<name>, one ECS service <name>, one pipeline).
   #   target_group: "api" / "web" = attached to that ALB target group, null = internal only
@@ -20,7 +24,7 @@ locals {
       env = {
         WALLET_URL  = "http://wallet-svc.paylab.internal:8082"
         PAYMENT_URL = "http://payment-svc.paylab.internal:8081"
-        CORS_ORIGIN = "https://${var.web_host}"
+        CORS_ORIGIN = local.web_origin
       }
     }
     "payment-svc" = {

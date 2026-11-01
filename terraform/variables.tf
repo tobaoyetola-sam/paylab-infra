@@ -10,21 +10,21 @@ variable "account_id" {
 }
 
 variable "domain_zone" {
-  description = "EXISTING public Route 53 hosted zone (delegated from Cloudflare). Not managed here."
+  description = "Optional. EXISTING public Route 53 hosted zone, e.g. lab.example.com, with an ISSUED ACM certificate for web_host + api_host. Not managed here. Leave empty to serve plain HTTP on the ALB's DNS name."
   type        = string
-  default     = "lab.aricxpoint.co"
+  default     = ""
 }
 
 variable "web_host" {
-  description = "Public hostname of the payment web page."
+  description = "Public hostname of the payment web page (only used when domain_zone is set)."
   type        = string
-  default     = "pay.lab.aricxpoint.co"
+  default     = ""
 }
 
 variable "api_host" {
-  description = "Public hostname of the API (api-gateway)."
+  description = "Public hostname of the API (only used when domain_zone is set)."
   type        = string
-  default     = "api.lab.aricxpoint.co"
+  default     = ""
 }
 
 variable "connection_arn" {
