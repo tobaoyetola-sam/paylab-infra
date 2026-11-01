@@ -1,6 +1,7 @@
 # Two modes (see var.domain_zone):
 #   domain set   -> HTTPS on pay./api. hostnames. The public zone and the ISSUED ACM certificate
-#                   are PERSISTENT and not managed here; they are only looked up.
+#                   (for web_host, or certificate_domain such as a *.zone wildcard) are
+#                   PERSISTENT and not managed here; they are only looked up.
 #   domain empty -> plain HTTP on the ALB's own DNS name. No zone, no certificate needed.
 data "aws_route53_zone" "public" {
   count        = local.use_domain ? 1 : 0
@@ -10,7 +11,7 @@ data "aws_route53_zone" "public" {
 
 data "aws_acm_certificate" "paylab" {
   count       = local.use_domain ? 1 : 0
-  domain      = var.web_host
+  domain      = var.certificate_domain != "" ? var.certificate_domain : var.web_host
   statuses    = ["ISSUED"]
   most_recent = true
 }
